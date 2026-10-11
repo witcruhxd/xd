@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Larsa - Sonsuz Aşkım</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; user-select:none; }
+  html, body {
+    background: radial-gradient(circle at center, #1b020a 0%, #0a0004 70%, #020002 100%);
+    overflow:hidden;
+    height:100vh;
+    width:100vw;
+    font-family:'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    position:relative;
+    touch-action:none;
+  }
+
+  /* Arka plan parıldayan yıldızlar canvas */
+  #bgCanvas {
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    z-index:1;
+  }
+
+  .scene {
+    position:relative;
+    width:100%;
+    height:100%;
+    perspective:1200px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index:2;
+  }
+
+  /* 3D Etkileşimli Kapsayıcı */
+  .world {
+    position:absolute;
+    transform-style:preserve-3d;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    width:0;
+    height:0;
+    will-change:transform;
+  }
+
+  /* Sabit neon kalp konturu (Arkada daima kalbin sabit ve net kalmasını sağlar) */
+  .heart-svg-frame {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%) translateZ(-30px);
+    pointer-events:none;
+    z-index:3;
+    animation:heartGlowPulse 2.4s ease-in-out infinite alternate;
+  }
+
+  @keyframes heartGlowPulse {
+    0% { filter: drop-shadow(0 0 12px rgba(255, 0, 60, 0.45)); opacity: 0.75; }
+    100% { filter: drop-shadow(0 0 35px rgba(255, 0, 60, 0.85)); opacity: 0.95; }
+  }
+
+  /* Merkezdeki sabit yazı ve kalp atışı */
+  .center {
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%) translateZ(10px);
+    text-align:center;
+    z-index:20;
+    animation:heartbeat 1.25s ease-in-out infinite;
+    pointer-events:none;
+  }
+
+  .center h1 {
+    font-size:clamp(44px, 10vw, 105px);
+    color:#fff;
+    letter-spacing:8px;
+    text-shadow:0 0 20px #ff003c, 0 0 45px #ff003c, 0 0 85px #ff003c, 0 0 120px rgba(255,0,60,0.85);
+    font-weight:900;
+  }
+
+  .center p {
+    color:#ff8fa3;
+    font-size:clamp(11px, 2.5vw, 16px);
+    letter-spacing:9px;
+    margin-top:12px;
+    text-shadow:0 0 10px #ff003c, 0 0 20px #ff003c;
+    font-weight:700;
+  }
+
+  .center .line {
+    width:70px;
+    height:2px;
+    background:#ff003c;
+    margin:16px auto 0;
+    box-shadow:0 0 12px #ff003c, 0 0 25px #ff003c;
+    border-radius:2px;
+  }
+
+  @keyframes heartbeat {
+    0%, 100% { transform:translate(-50%,-50%) translateZ(10px) scale(1); }
+    15% { transform:translate(-50%,-50%) translateZ(10px) scale(1.07); }
+    30% { transform:translate(-50%,-50%) translateZ(10px) scale(1); }
+    45% { transform:translate(-50%,-50%) translateZ(10px) scale(1.04); }
+    60% { transform:translate(-50%,-50%) translateZ(10px) scale(1); }
+  }
+
+  /* 3D Dönen kelimeler */
+  .word {
+    position:absolute;
+    font-size:11.5px;
+    white-space:nowrap;
+    font-weight:700;
+    letter-spacing:1px;
+    top:0;
+    left:0;
+    transform-origin:center center;
+    backface-visibility:visible;
+    pointer-events:none;
+    transition:color 0.2s, text-shadow 0.2s;
+    will-change:transform, opacity;
+  }
+
+  .glow-ring {
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:84vmin;
+    height:84vmin;
+    border-radius:50%;
+    border:1px solid rgba(255,0,60,0.2);
+    transform:translate(-50%,-50%) rotateX(72deg) translateZ(-50px);
+    box-shadow:0 0 75px rgba(255,0,60,0.2) inset, 0 0 35px rgba(255,0,60,0.12);
+    animation:spin 24s linear infinite;
+    pointer-events:none;
+    z-index:2;
+  }
+
+  @keyframes spin {
+    from { transform:translate(-50%,-50%) rotateX(72deg) translateZ(-50px) rotateZ(0deg); }
+    to { transform:translate(-50%,-50%) rotateX(72deg) translateZ(-50px) rotateZ(360deg); }
+  }
+
+  /* Kontrol ve Bilgi Paneli (HUD) */
+  .hud {
+    position:fixed;
+    bottom:22px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:40;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    pointer-events:none;
+    width:100%;
+    max-width:500px;
+    padding:0 15px;
+  }
+
+  .btn-group {
+    display:flex;
+    gap:10px;
+    pointer-events:auto;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+
+  .hud-btn {
+    background:rgba(255, 0, 60, 0.16);
+    border:1px solid rgba(255, 77, 109, 0.45);
+    color:#ff8fa3;
+    padding:8px 18px;
+    border-radius:24px;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:1px;
+    cursor:pointer;
+    backdrop-filter:blur(10px);
+    transition:all 0.25s ease;
+    box-shadow:0 0 15px rgba(255,0,60,0.2);
+    outline:none;
+  }
+
+  .hud-btn:hover {
+    background:rgba(255, 0, 60, 0.4);
+    color:#fff;
+    box-shadow:0 0 25px rgba(255,0,60,0.6);
+    transform:translateY(-2px) scale(1.03);
+  }
+
+  .hud-btn.active {
+    background:rgba(255, 0, 60, 0.45);
+    color:#fff;
+    border-color:#ff4d6d;
+    box-shadow:0 0 25px rgba(255,0,60,0.6);
+  }
+
+  .hint {
+    font-size:11.5px;
+    color:rgba(255, 143, 163, 0.7);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    text-shadow:0 0 8px rgba(255,0,60,0.5);
+    animation:fadeHint 3s ease-in-out infinite alternate;
+    text-align:center;
+  }
+
+  @keyframes fadeHint {
+    0% { opacity: 0.4; }
+    100% { opacity: 0.95; }
+  }
+
+  /* Tıklama ile uçuşan kalp parçacıkları */
+  .click-heart {
+    position:fixed;
+    pointer-events:none;
+    z-index:99;
+    color:#ff003c;
+    font-size:16px;
+    animation:floatUp 1.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    text-shadow:0 0 10px #ff003c, 0 0 25px #ff003c;
+  }
+
+  @keyframes floatUp {
+    0% {
+      opacity:1;
+      transform:translate(-50%, -50%) scale(0.6) rotate(0deg);
+    }
+    100% {
+      opacity:0;
+      transform:translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.65) rotate(var(--rot));
+    }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+
+<div class="scene" id="scene">
+  <div class="glow-ring"></div>
+
+  <!-- Sabit neon kalp çerçevesi (kalp şeklini her zaman sabit ve net tutar) -->
+  <svg class="heart-svg-frame" id="heartSvg" viewBox="-22 -22 44 44">
+    <defs>
+      <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="0.8" result="coloredBlur"/>
+        <feMerge>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="coloredBlur"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
+    <path id="svgHeartPath" d="" fill="none" stroke="rgba(255, 0, 60, 0.55)" stroke-width="0.35" filter="url(#neonGlow)"/>
+    <path id="svgHeartPathInner" d="" fill="none" stroke="rgba(255, 143, 163, 0.75)" stroke-width="0.15"/>
+  </svg>
+
+  <div class="center">
+    <h1>LARSA</h1>
+    <p>SONSUZ AŞKIM</p>
+    <div class="line"></div>
+  </div>
+
+  <div class="world" id="world">
+    <div id="heartContainer"></div>
+  </div>
+</div>
+
+<div class="hud">
+  <span class="hint">✦ Kalp Sabit • Yazılar Bağımsız Dönüyor • Döndürmek için Sürükle ✦</span>
+  <div class="btn-group">
+    <button class="hud-btn active" id="modeBtn">🔁 Mod: 3D Eksen Dönüşü</button>
+    <button class="hud-btn" id="audioBtn">🎵 Romantik Melodi: Başlat</button>
+  </div>
+</div>
+
+<script>
+// Sevgi sözcükleri
+const wordList = [
+  "AŞKIM","BALIM","BEBEĞİM","CANIM","SEVGİLİM","MELEĞİM",
+  "BİRİCİĞİM","SONSUZUM","HAYATIM","TATLIM","GÜZELİM","PRENSESİM",
+  "ÖMRÜM","NEFESİM","DÜNYAM","HER ŞEYİM","KALBİM","GÖZBEBEĞİM",
+  "GÜNEŞİM","YILDIZIM","HUZURUM","NEŞEM","TEK AŞKIM","CENNETİM",
+  "AŞKIM","BALIM","BEBEĞİM","CANIM","SEVGİLİM","MELEĞİM",
+  "BİRİCİĞİM","SONSUZUM","HAYATIM","TATLIM","GÜZELİM","PRENSESİM",
+  "ÖMRÜM","NEFESİM","HAYATIM","CANIM"
+];
+
+// Kalp 3D Parametrik Fonksiyonu
+// x = 16 sin^3(t)
+// y = -(13 cos(t) - 5 cos(2t) - 2 cos(3t) - cos(4t))
+function getHeartPoint(t) {
+  const x = 16 * Math.pow(Math.sin(t), 3);
+  const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+  return { x, y };
+}
+
+// Sabit SVG neon kalp yolunu çiz
+function buildSvgHeart() {
+  const steps = 120;
+  let d = '';
+  for (let i = 0; i <= steps; i++) {
+    const t = (Math.PI * 2 / steps) * i;
+    const pt = getHeartPoint(t);
+    // SVG viewBox ile uyumlu koordinatlar
+    const sx = pt.x * 0.95;
+    const sy = pt.y * 1.05;
+    if (i === 0) d += `M ${sx.toFixed(2)} ${sy.toFixed(2)} `;
+    else d += `L ${sx.toFixed(2)} ${sy.toFixed(2)} `;
+  }
+  d += 'Z';
+  document.getElementById('svgHeartPath').setAttribute('d', d);
+  document.getElementById('svgHeartPathInner').setAttribute('d', d);
+}
+buildSvgHeart();
+
+const container = document.getElementById('heartContainer');
+const world = document.getElementById('world');
+const count = wordList.length;
+
+let wordsData = [];
+let currentScale = 1;
+
+function updateScale() {
+  currentScale = Math.min(window.innerWidth, window.innerHeight) / 38;
+  const svg = document.getElementById('heartSvg');
+  const svgSize = currentScale * 36;
+  svg.style.width = svgSize + 'px';
+  svg.style.height = svgSize + 'px';
+}
+updateScale();
+
+// Kelimeleri oluştur ve her birine bağımsız hareket parametreleri ata
+function initWords() {
+  container.innerHTML = '';
+  wordsData = [];
+
+  for (let i = 0; i < count; i++) {
+    const t = (Math.PI * 2 / count) * i;
+    const pt = getHeartPoint(t);
+
+    const el = document.createElement('div');
+    el.className = 'word';
+    el.textContent = wordList[i % wordList.length];
+    container.appendChild(el);
+
+    // Her kelimenin kendine ait bağımsız hızı ve yönü
+    // Bazıları saat yönünde, bazıları ters yönde; kimi hızlı kimi yavaş
+    const dir = (i % 2 === 0) ? 1 : -1;
+    const speed = (0.35 + (i * 0.04) % 0.6) * dir;
+    const initialAngle = (Math.PI * 2 / count) * i * 2; // Dağıtılmış başlangıç açısı
+
+    // Dikey süzülme ve salınım
+    const floatSpeed = 1.0 + (i % 5) * 0.3;
+    const floatPhase = i * 0.8;
+
+    // 3D derinlik katmanı yayılımı
+    const zSpread = ((i % 5) - 2) * 25;
+
+    wordsData.push({
+      el: el,
+      text: wordList[i % wordList.length],
+      t: t,
+      baseX: pt.x,
+      baseY: pt.y,
+      radius: Math.abs(pt.x),
+      angle: initialAngle,
+      speed: speed,
+      contourSpeed: 0.25 + (i % 4) * 0.08,
+      contourT: t,
+      floatSpeed: floatSpeed,
+      floatPhase: floatPhase,
+      zSpread: zSpread
+    });
+  }
+}
+initWords();
+
+// =================== ANİMASYON MOTORU ===================
+// currentMode: 'axis' (düşey eksen etrafında 3D bağımsız dönüş)
+//              'contour' (kalp eğrisi hattı boyunca bağımsız akış)
+let currentMode = 'axis';
+let lastTime = performance.now();
+
+function animate(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.1);
+  lastTime = now;
+  const timeSec = now * 0.001;
+
+  for (let i = 0; i < wordsData.length; i++) {
+    const w = wordsData[i];
+    let px = 0, py = 0, pz = 0;
+
+    if (currentMode === 'axis') {
+      // 1. MOD: Düşey Y-Ekseni etrafında 3D bağımsız dönüş
+      // Her kelime kendi bağımsız 'speed' değeriyle döner!
+      w.angle += w.speed * dt;
+
+      // Kalbin o yükseklikteki genişliği (yarıçapı)
+      const r = Math.max(w.radius * currentScale * 0.95, 25);
+
+      // Y ekseni etrafında 3D çember yörünge
+      px = r * Math.sin(w.angle);
+      pz = r * Math.cos(w.angle) + w.zSpread;
+      // Yüksekliği kalpteki orijinal konumu + bağımsız hafif süzülme
+      py = w.baseY * currentScale * 1.15 + Math.sin(timeSec * w.floatSpeed + w.floatPhase) * 6;
+
+    } else {
+      // 2. MOD: Sabit Kalp yörüngesi boyunca bağımsız akış
+      w.contourT = (w.contourT + w.contourSpeed * dt) % (Math.PI * 2);
+      const pt = getHeartPoint(w.contourT);
+
+      px = pt.x * currentScale * 0.95;
+      py = pt.y * currentScale * 1.15;
+      pz = Math.sin(timeSec * 2.5 + i) * 35 + w.zSpread * 0.4;
+    }
+
+    // Z derinliğine göre dinamik ölçekleme, opaklık ve parlaklık
+    // Önde olan kelimeler daha büyük, parlak ve belirgin olur
+    const zScale = 0.85 + (pz > 0 ? (pz / 280) * 0.35 : (pz / 400) * 0.15);
+    const opacity = Math.min(Math.max(0.42 + (pz > 0 ? (pz / 220) * 0.58 : 0), 0.35), 1.0);
+
+    w.el.style.transform = `translate3d(${px.toFixed(1)}px, ${py.toFixed(1)}px, ${pz.toFixed(1)}px) translate(-50%, -50%) scale(${zScale.toFixed(2)})`;
+    w.el.style.opacity = opacity.toFixed(2);
+
+    if (pz > 30) {
+      w.el.style.color = '#fff';
+      w.el.style.textShadow = '0 0 10px #ff003c, 0 0 20px #ff003c, 0 0 35px #ff4d6d';
+      w.el.style.zIndex = '25';
+    } else {
+      w.el.style.color = '#ff4d6d';
+      w.el.style.textShadow = '0 0 6px #ff003c, 0 0 14px #ff003c';
+      w.el.style.zIndex = '5';
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// =================== 3D MOUSE & TOUCH ETKİLEŞİMİ ===================
+let rotX = 0, rotY = 0;
+let targetRotX = 0, targetRotY = 0;
+let isDragging = false;
+let startX = 0, startY = 0;
+
+window.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.hud-btn')) return;
+  isDragging = true;
+  startX = e.clientX;
+  startY = e.clientY;
+  createHeartBurst(e.clientX, e.clientY);
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDragging) {
+    // Hafif mouse takip derinliği
+    const dx = (e.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+    const dy = (e.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+    targetRotY = dx * 18;
+    targetRotX = -dy * 12;
+    return;
+  }
+  const deltaX = e.clientX - startX;
+  const deltaY = e.clientY - startY;
+  targetRotY += deltaX * 0.35;
+  targetRotX -= deltaY * 0.35;
+  startX = e.clientX;
+  startY = e.clientY;
+});
+
+window.addEventListener('pointerup', () => { isDragging = false; });
+window.addEventListener('pointercancel', () => { isDragging = false; });
+
+function animateWorld() {
+  rotX += (targetRotX - rotX) * 0.08;
+  rotY += (targetRotY - rotY) * 0.08;
+  world.style.transform = `rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg)`;
+  requestAnimationFrame(animateWorld);
+}
+animateWorld();
+
+// =================== MOD DEĞİŞTİRME BUTONU ===================
+const modeBtn = document.getElementById('modeBtn');
+modeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (currentMode === 'axis') {
+    currentMode = 'contour';
+    modeBtn.textContent = '🔁 Mod: Kalp Yörüngesi Akışı';
+    modeBtn.classList.remove('active');
+  } else {
+    currentMode = 'axis';
+    modeBtn.textContent = '🔁 Mod: 3D Eksen Dönüşü';
+    modeBtn.classList.add('active');
+  }
+});
+
+// =================== TIKLAMA İLE KALP PATLAMASI ===================
+const heartSymbols = ["❤", "💖", "💕", "✨", "💓", "💗"];
+
+function createHeartBurst(cx, cy) {
+  const burstCount = 10;
+  for (let i = 0; i < burstCount; i++) {
+    const el = document.createElement('div');
+    el.className = 'click-heart';
+    el.textContent = heartSymbols[Math.floor(Math.random() * heartSymbols.length)];
+    el.style.left = cx + 'px';
+    el.style.top = cy + 'px';
+
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 50 + Math.random() * 90;
+    const dx = Math.cos(angle) * dist + 'px';
+    const dy = (Math.sin(angle) * dist - 30) + 'px';
+    const rot = (Math.random() * 60 - 30) + 'deg';
+
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--dy', dy);
+    el.style.setProperty('--rot', rot);
+    el.style.fontSize = (14 + Math.random() * 16) + 'px';
+
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1250);
+  }
+}
+
+// =================== ARKA PLAN YILDIZLARI ===================
+const canvas = document.getElementById('bgCanvas');
+const ctx = canvas.getContext('2d');
+let stars = [];
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  updateScale();
+  initStars();
+}
+
+function initStars() {
+  stars = [];
+  const starCount = Math.floor((canvas.width * canvas.height) / 8000);
+  for (let i = 0; i < starCount; i++) {
+    stars.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      radius: Math.random() * 1.5 + 0.4,
+      alpha: Math.random() * 0.8 + 0.2,
+      speed: Math.random() * 0.02 + 0.005,
+      color: Math.random() > 0.4 ? '255, 77, 109' : '255, 255, 255'
+    });
+  }
+}
+
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (let star of stars) {
+    star.alpha += star.speed;
+    if (star.alpha > 0.9 || star.alpha < 0.2) star.speed = -star.speed;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${star.color}, ${Math.abs(star.alpha)})`;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = `rgba(${star.color}, 0.8)`;
+    ctx.fill();
+  }
+  requestAnimationFrame(drawStars);
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+drawStars();
+
+// =================== ROMANTİK MELODİ (WEB AUDIO API) ===================
+let audioCtx = null;
+let isPlaying = false;
+let melodyInterval = null;
+
+const progression = [
+  [329.63, 392.00, 493.88, 659.25], // Em
+  [261.63, 329.63, 392.00, 523.25], // C
+  [349.23, 440.00, 523.25, 698.46], // F
+  [392.00, 493.88, 587.33, 783.99]  // G
+];
+
+function playTone(freq, time, duration = 1.6) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, time);
+
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(0.09, time + 0.15);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(time);
+  osc.stop(time + duration);
+}
+
+function startMelody() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+
+  let step = 0;
+  function tick() {
+    const chordIndex = Math.floor(step / 4) % progression.length;
+    const noteIndex = step % 4;
+    const chord = progression[chordIndex];
+    const freq = chord[noteIndex];
+
+    const now = audioCtx.currentTime;
+    playTone(freq, now, 1.8);
+
+    if (noteIndex === 0) {
+      playTone(chord[0] / 2, now, 2.5);
+    }
+
+    step++;
+  }
+
+  tick();
+  melodyInterval = setInterval(tick, 550);
+}
+
+function stopMelody() {
+  if (melodyInterval) clearInterval(melodyInterval);
+  melodyInterval = null;
+}
+
+const audioBtn = document.getElementById('audioBtn');
+audioBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!isPlaying) {
+    startMelody();
+    isPlaying = true;
+    audioBtn.textContent = '⏸ Melodiyi Durdur';
+    audioBtn.classList.add('active');
+  } else {
+    stopMelody();
+    isPlaying = false;
+    audioBtn.textContent = '🎵 Romantik Melodi: Başlat';
+    audioBtn.classList.remove('active');
+  }
+});
+</script>
+</body>
+</html>
